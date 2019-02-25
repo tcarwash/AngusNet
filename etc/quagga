@@ -1,0 +1,32 @@
+interface ax0
+ description AX25 AMPR
+! The interface must be defined in quagga or
+! the rip daemon will not usefully interact
+! with the rest of the network. Set the IP
+! address of the interface here
+ ip address <your IP>/8
+!
+router rip
+! the default timing would kill the
+! packet network with RIP communication
+ timers basic 300 1200 3600
+! Tell quagga to only publish routes that
+! are defined inside quagga
+ redistribute static
+ network 44.0.0.0/8
+ ! broadcast packets cause lots of problems
+ passive-interface ax0
+! Filter the routes that are sent and learned
+ distribute-list amprnet in ax0
+ distribute-list amprnet out ax0
+!
+! Only AMPR routes should be sent or received
+access-list amprnet permit 44.0.0.0/8
+access-list amprnet deny any
+!
+! Only enable IP forwarding if this node is
+! going to route for other nodes and not just
+! listen to the network for the current routes.
+! ip forwarding
+!
+end

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+set -e
+
+# A long interval between packets is
+# needed to prevent flooding on the air
+# and responses can take a long time so
+# those timing values are increased here.
+exec ping -A -i 20 -W 30 "$@"

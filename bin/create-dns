@@ -1,0 +1,29 @@
+#!/usr/bin/env perl
+
+# Output files to help with managing DNS
+
+# TODO
+# * output file in DNS zone or /etc/hosts format based on argument
+# * validate the contents of the files
+
+use strict;
+use warnings;
+use v5.10;
+
+main();
+
+sub main {
+    my @host_files = @ARGV;
+
+    die "must specify one or more input files" unless @host_files;
+
+    while(<>) {
+        # output comments as is
+        if (/^\s+#/) {
+            print;
+        } else {
+            chomp;
+            say $_, ".packet";
+        }
+    }
+}
