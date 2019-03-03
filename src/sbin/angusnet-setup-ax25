@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+set -x
+set -e
+
+AX25_NAME="ic7100"
+AX25_INT="ax0"
+
+#modprobe netrom
+
+/usr/sbin/kissattach "$(readlink /tmp/kisstnc)" "$AX25_NAME"
+#/usr/sbin/nrattach netrom
+
+ifconfig "$AX25_INT" -multicast
+
+sysctl net.ipv4.conf."$AX25_INT".accept_redirects=0
+sysctl net.ipv4.conf."$AX25_INT".send_redirects=0
+
+echo 1200000 > /proc/sys/net/ipv4/neigh/"$AX25_INT"/base_reachable_time_ms
+echo 15000 > /proc/sys/net/ipv4/neigh/"$AX25_INT"/retrans_time_ms
