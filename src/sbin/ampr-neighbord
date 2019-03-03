@@ -13,7 +13,9 @@ use constant PF_PACKET => 17;
 # /usr/include/x86_64-linux-gnu/bits/socket_type.h:41
 use constant SOCK_PACKET => 10;
 # /usr/include/linux/if_ether.h:121
-use constant PROTO_PACKET => 0x0002;
+# this should be htons(0x0002) but I can't find an htons()
+# implementation yet
+use constant PROTO_PACKET => 512;
 
 main();
 
@@ -22,8 +24,8 @@ sub main {
     my $sniff = make_sniff_socket();
 
     while(1) {
-        my $result = recv($sniff, $buf, BUFSIZ, 0);
-        say "result: $result";
+        my $interface = recv($sniff, $buf, BUFSIZ, 0);
+        say "got something from $interface";
     }
 }
 
