@@ -19,11 +19,11 @@ sub main {
 
     while(<>) {
         # output comments as is
-        if (/^\s+#/) {
+        if (/^\s*#/) {
             print;
         } else {
             chomp;
-            say $_, ".packet";
+            say $_, ".angus";
         }
     }
 }
