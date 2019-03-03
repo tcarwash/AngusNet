@@ -1,0 +1,10 @@
+[Unit]
+Description=Packet Radio Beacon
+After=networking-online.target
+
+[Service]
+ExecStart=/usr/sbin/beacon -t 10 -l ic7610 "This is my packet station info."
+Restart=always
+
+[Install]
+WantedBy=default.target
