@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [ -e /etc/local/angusnet/nodeinfo.txt ]; then
+    cat /etc/local/angusnet/nodeinfo.txt
+    echo
+fi
+
+echo -n "System time: "
+date
+echo
+
+echo "AX25 IP neighbors"
+angusnet-show-ampr-neighbors || true
+echo
+
+echo "NetRom neighbors"
+angusnet-show-netrom-neighbors || true
+echo
+
+echo "NetRom nodes"
+angusnet-show-netrom-nodes || true
+echo
+
+route -n | head -n 2
+angusnet-show-ampr-route || true
+echo
+
+echo "RIP route status"
+angusnet-show-ip-rip || true
+echo
+
+echo "RIP neighbor status"
+angusnet-show-ip-rip-status || true
+echo
+
+echo "Routing daemon status"
+angusnet-show-ip-route || true
+echo
+
+echo "Press enter to exit"
+read

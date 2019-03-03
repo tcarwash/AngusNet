@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+set -e
+
+# close STDIN to be paranoid
+exec 0<&-
+
+exec arp -n | grep ax25

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -e
+
+# close STDIN to be paranoid
+exec 0<&-
+
+if ! [ -e /proc/net/nr_neigh ]; then
+    exit 1
+fi
+
+exec cat /proc/net/nr_neigh
