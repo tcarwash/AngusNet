@@ -1,0 +1,35 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use v5.10;
+use autodie ':all';
+
+use Socket;
+
+use constant BUFSIZ => 32768;
+# /usr/include/x86_64-linux-gnu/bits/socket.h:61
+use constant PF_PACKET => 17;
+# /usr/include/x86_64-linux-gnu/bits/socket_type.h:41
+use constant SOCK_PACKET => 10;
+# /usr/include/linux/if_ether.h:121
+use constant PROTO_PACKET => 0x0002;
+
+main();
+
+sub main {
+    my $buf;
+    my $sniff = make_sniff_socket();
+
+    while(1) {
+        my $result = recv($sniff, $buf, BUFSIZ, 0);
+        say "result: $result";
+    }
+}
+
+sub make_sniff_socket {
+    my $result = socket(my $sock, PF_PACKET, SOCK_PACKET, PROTO_PACKET);
+    die "could not create socket: $!" unless defined $result;
+
+    return $sock;
+}
