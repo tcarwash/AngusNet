@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -e
+
+SNOS_BBS_PORT="7301"
+
+if [ "$1" == "" ]; then
+    echo "Usage: $(basename $0) <hostname>"
+fi
+
+exec telnet "$1" "$SNOS_BBS_PORT"

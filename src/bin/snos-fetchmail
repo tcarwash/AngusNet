@@ -1,0 +1,257 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use v5.10;
+use autodie ':all';
+
+use Data::Dumper;
+use Email::Address;
+use File::Basename;
+use Getopt::Long;
+use HTML::TreeBuilder;
+use HTTP::Cookies;
+use Net::Domain qw (hostfqdn);
+use IPC::Run qw( start pump finish );
+use LWP::UserAgent;
+use URI;
+
+main();
+
+sub main {
+    my %args = parse_args();
+    my $base_url = URI->new($ARGV[0]);
+    my $userinfo = $base_url->userinfo;
+    my ($callsign, $password) = parse_userinfo($userinfo);
+    our $UA = make_agent();
+
+    # remove the possibly sensitive information
+    $base_url->userinfo($callsign);
+
+    my $fqdn = hostfqdn();
+    die "could not determine host FQDN" unless defined $fqdn;
+
+    log_line($base_url, "Logging in");
+    login($base_url, $callsign, $password);
+
+    log_line($base_url, "Getting message list");
+    my @messages = list($base_url);
+    @messages = grep { $_->{to} eq uc($callsign) } @messages;
+    @messages = sort { $a->{id} <=> $b->{id} } @messages;
+    my @message_ids = map { $_->{id} } @messages;
+    log_line($base_url, "Found ", scalar(@messages), " messages: ", join(' ', @message_ids));
+
+    return 0 unless @messages;
+
+    foreach my $message (@messages) {
+        my $id = $message->{id};
+        log_line($base_url, "Downloading message $id");
+
+        my ($headers, $body) = get_message($base_url, $id);
+        my $from = get_from($headers);
+
+        my @new_headers = (
+            "X-SNOS-fetchmail-time: " . localtime(),
+            "X-SNOS-fetchmail-received: $fqdn",
+            "X-SNOS-fetchmail-url: $base_url",
+            "X-SNOS-fetchmail-msgid: $id",
+        );
+
+        $headers = join("\n", @new_headers, $headers);
+
+        my $content = join("\n", $headers, $body);
+        log_line($base_url, "Got message $id");
+
+        log_line($base_url, "Sending message: ");
+        my $with_spaces = $content;
+        $with_spaces =~ s/^/  /mg;
+        say STDERR $with_spaces;
+
+        # FIXME start the mail delivery first then kill the message
+        # so there is a really good chance talking to the mail
+        # server wont fail and the message is deleted before it
+        # moves along. But don't deliver first or a failure during
+        # delete will generate duplicates.
+        # This isn't good enough long term.
+        my @sendmail_command = ("sendmail", "-bm", $args{to});
+        log_line($base_url, "Executing ", join(" ", @sendmail_command));
+        my $sendmail = start(\@sendmail_command, \$content);
+
+        log_line($base_url, "Killing message $id");
+        kill_message($base_url, $id);
+
+        die "sendmail exited with error: $?" unless finish($sendmail);
+        log_line($base_url, "Done with message $id");
+    }
+}
+
+sub parse_args {
+    my %args;
+
+    GetOptions(
+        "to=s" => \$args{to},
+        "password=s" => \$args{password},
+    ) or usage();
+
+    usage() unless @ARGV == 1;
+
+    # getlogin() doesn't work inside systemd
+    $args{to} = getpwuid($<) unless defined $args{to};
+
+    return %args;
+}
+
+sub usage {
+    say STDERR "Usage:";
+    say STDERR "  ", basename($0), " [--to <address>] <URL>";
+    say STDERR "";
+    say STDERR "  --to is the address to send the fetched mail to. If no address is specified";
+    say STDERR "  then the mail is sent to the current user.";
+    say STDERR "";
+    say STDERR "  The URL must have a username in it. If a password is present in the URL it";
+    say STDERR "  will be used when logging in.";
+    say STDERR "";
+    say STDERR "Examples:";
+    say STDERR "  ", basename($0), " http://SOMECALL\@othercall.ampr.org/";
+    say STDERR "  ", basename($0), " http://SOMECALL:apassword\@somehost.ampr.org/";
+    say STDERR "  ", basename($0), " --to someone\@test.com http://SOMECALL\@othercall.ampr.org/";
+
+    exit(1);
+}
+
+sub log_line {
+    my ($url, @line) = @_;
+
+    say STDERR "$url ", join('', @line);
+}
+
+sub parse_userinfo {
+    my ($userinfo) = @_;
+
+    die "there was not a username present" unless defined $userinfo;
+    my @parts = split(":", $userinfo);
+    return @parts;
+}
+
+sub get_from {
+    my ($content) = @_;
+
+    unless ($content =~ m/^From: (.+)/m) {
+        die "could not find From: header";
+    }
+
+    my $from_line = $1;
+    my @parsed = Email::Address->parse($from_line);
+    die "expected to find 1 email address" unless @parsed == 1;
+
+    return $parsed[0]->address;
+}
+
+sub make_agent {
+    my $cookies = HTTP::Cookies->new;
+    my $ua = LWP::UserAgent->new(keep_alive => 1, cookie_jar => $cookies);
+    return $ua;
+}
+
+sub login {
+    my ($base, $callsign, $password) = @_;
+    my $url = $base->clone;
+    our $UA;
+
+    $password = "" unless defined $password;
+
+    $url->path('/nodehome.htm');
+
+    my $resp = $UA->post($url, { User => $callsign, Password => $password });
+
+    die "could not fetch $url: " . $resp->status_line unless $resp->is_success;
+}
+
+sub list {
+    my ($base) = @_;
+    my $url = $base->clone;
+    our $UA;
+
+    $url->path('/cmd/ndmsgli.ssi');
+
+    my $resp = $UA->post($url, { Kind => 'P', Max => 50 });
+
+    die "could not fetch $url: " . $resp->status_line unless $resp->is_success;
+    my $html = $resp->decoded_content;
+    my @messages = extract_message_info($html);
+
+    return @messages;
+}
+
+sub extract_message_info {
+    my ($html) = @_;
+    my $tree = HTML::TreeBuilder->new_from_content($html);
+    my @messages;
+
+    foreach my $row ($tree->look_down(_tag => 'tr', class => 'msgrow')) {
+        my @tds = $row->look_down(_tag => 'td');
+        my $id = $row->look_down(type => 'submit')->attr('name');
+        my $type = $tds[2]->as_trimmed_text;
+        my $to = $tds[3]->as_trimmed_text;
+        my $from = $tds[4]->as_trimmed_text;
+
+        next unless $type eq 'P';
+        push(@messages, { id => $id, type => $type, to => $to, from => $from });
+    }
+
+    return @messages;
+}
+
+sub get_message {
+    my ($base_url, $id) = @_;
+    my $url = $base_url->clone;
+    our $UA;
+
+    $url->path('/cmd/msgrd.ssi');
+    $url->query("$id=read");
+
+    my $resp = $UA->get($url);
+    die "could not download message $id from $url: " . $resp->status_line unless $resp->is_success;
+
+    my $html = $resp->decoded_content;
+    my $tree = HTML::TreeBuilder->new_from_content($html);
+
+    my @header = $tree->look_down(_tag => 'pre', class => 'msghdr');
+    die "invalid number of msghdr" unless @header == 1;
+    my $header_text = fix_whitespace($header[0]->as_text);
+
+    my @body = $tree->look_down(_tag => 'pre', class => 'msgbody');
+    die "invalid number of msgbody" unless @body == 1;
+    my $body_text = fix_whitespace($body[0]->as_text);
+
+    return($header_text, $body_text);
+}
+
+sub fix_whitespace {
+    my ($content) = @_;
+    $content =~ s/^.*\n// or die "unexpected whitespace";
+    return $content;
+}
+
+sub kill_message {
+    my ($base_url, $id) = @_;
+    my $url = $base_url->clone;
+    our $UA;
+
+    $url->path('/cmd/msgrd.ssi');
+    $url->query("$id=kill");
+
+    # ugh modifying state with a get :-(
+    my $resp = $UA->get($url);
+    die "could not kill message $id from $url: " . $resp->status_line unless $resp->is_success;
+
+    my $tree = HTML::TreeBuilder->new_from_content($resp->decoded_content);
+    my @bodies = $tree->look_down(_tag => 'body');
+    die "expected exactly 1 <body>" unless @bodies == 1;
+
+    my $body = $bodies[0]->as_trimmed_text;
+
+    die "unexpected result: $body" unless $body eq 'Message killed';
+
+    return;
+}
