@@ -34,6 +34,7 @@ sub main {
             check_src(@parts);
             check_mtu(@parts);
             check_window(@parts);
+            check_rtt(@parts);
         }
 
         sleep(1);
@@ -117,4 +118,24 @@ sub check_window {
     return if $found_mtu;
 
     system(ROUTE_CHANGE_CMD, @parts, qw(window 1024));
+}
+
+sub check_rtt {
+    my (@parts) = @_;
+    my $found_mtu = 0;
+
+    for (my $i = 0; $i < $#parts; $i++) {
+        my $token = $parts[$i];
+
+        if ($token eq 'rtt') {
+            # FIXME this should check the MTU value instead of just
+            # seeing if it exists
+            $found_mtu = 1;
+            last;
+        }
+    }
+
+    return if $found_mtu;
+
+    system(ROUTE_CHANGE_CMD, @parts, qw(rtt 1.5s));
 }
