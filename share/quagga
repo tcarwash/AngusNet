@@ -9,7 +9,7 @@ interface ax0
 router rip
 ! the default timing would kill the
 ! packet network with RIP communication
- timers basic 300 1200 3600
+ timers basic 300 1200 86400
 ! Tell quagga to only publish routes that
 ! are defined inside quagga
  redistribute static
