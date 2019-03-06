@@ -1,0 +1,145 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use v5.10;
+use autodie ':all';
+
+use Data::Dumper;
+use HTML::TreeBuilder;
+use HTTP::Cookies;
+use LWP::UserAgent;
+use URI::URL;
+
+main();
+
+sub main {
+    die "usage: <SNOS hostname> <callsign> [<password>]" unless @ARGV >= 2;
+    my ($url_string, $username, $password) = @ARGV;
+    my $base_url = URI->new($url_string);
+    our $UA = make_agent();
+
+    print STDERR "Logging in to $base_url: ";
+    login($base_url, $username, $password);
+    say STDERR "done";
+
+    print STDERR "Getting message list: ";
+    my @messages = list($base_url);
+    @messages = grep { $_->{to} eq 'KG7OEM' } @messages;
+    say STDERR scalar(@messages), " found";
+
+    return 0 unless @messages;
+
+    print STDERR "Getting messages: ";
+    foreach my $message (@messages) {
+        my $id = $message->{id};
+        print STDERR "$id ";
+        my $content = get_message($base_url, $id);
+        say $content;
+
+        kill_message($base_url, $id);
+    }
+}
+
+sub make_agent {
+    my $cookies = HTTP::Cookies->new;
+    my $ua = LWP::UserAgent->new(keep_alive => 1, cookie_jar => $cookies);
+    return $ua;
+}
+
+sub login {
+    my ($base, $username, $password) = @_;
+    my $url = $base->clone;
+    our $UA;
+
+    $password = "" unless defined $password;
+
+    $url->path('/nodehome.htm');
+
+    my $resp = $UA->post($url, { User => $username, Password => $password });
+
+    die "could not fetch $url: " . $resp->status_line unless $resp->is_success;
+}
+
+sub list {
+    my ($base) = @_;
+    my $url = $base->clone;
+    our $UA;
+
+    $url->path('/cmd/ndmsgli.ssi');
+
+    my $resp = $UA->post($url, { Kind => 'P', Max => 50 });
+
+    die "could not fetch $url: " . $resp->status_line unless $resp->is_success;
+    my $html = $resp->decoded_content;
+    my @messages = extract_message_info($html);
+
+    return @messages;
+}
+
+sub extract_message_info {
+    my ($html) = @_;
+    my $tree = HTML::TreeBuilder->new_from_content($html);
+    my @messages;
+
+    foreach my $row ($tree->look_down(_tag => 'tr', class => 'msgrow')) {
+        my @tds = $row->look_down(_tag => 'td');
+        my $id = $row->look_down(type => 'submit')->attr('name');
+        my $type = $tds[2]->as_trimmed_text;
+        my $to = $tds[3]->as_trimmed_text;
+        my $from = $tds[4]->as_trimmed_text;
+
+        next unless $type eq 'P';
+        push(@messages, { id => $id, type => $type, to => $to, from => $from });
+    }
+
+    return @messages;
+}
+
+sub get_message {
+    my ($base_url, $id) = @_;
+    my $url = $base_url->clone;
+    our $UA;
+
+    $url->path('/cmd/msgrd.ssi');
+    $url->query("$id=read");
+
+    my $resp = $UA->get($url);
+    die "could not download message $id from $url: " . $resp->status_line unless $resp->is_success;
+
+    my $html = $resp->decoded_content;
+    my $tree = HTML::TreeBuilder->new_from_content($html);
+
+    my @header = $tree->look_down(_tag => 'pre', class => 'msghdr');
+    die "invalid number of msghdr" unless @header == 1;
+    my $header_text = $header[0]->as_text;
+
+    my @body = $tree->look_down(_tag => 'pre', class => 'msgbody');
+    die "invalid number of msgbody" unless @body == 1;
+    my $body_text = $body[0]->as_text;
+
+    return $header_text . " " . $body_text;
+}
+
+sub kill_message {
+    my ($base_url, $id) = @_;
+    my $url = $base_url->clone;
+    our $UA;
+
+    $url->path('/cmd/msgrd.ssi');
+    $url->query("$id=kill");
+
+    # ugh modifying state with a get :-(
+    my $resp = $UA->get($url);
+    die "could not kill message $id from $url: " . $resp->status_line unless $resp->is_success;
+
+    my $tree = HTML::TreeBuilder->new_from_content($resp->decoded_content);
+    my @bodies = $tree->look_down(_tag => 'body');
+    die "expected exactly 1 <body>" unless @bodies == 1;
+
+    my $body = $bodies[0]->as_trimmed_text;
+
+    die "unexpected result: $body" unless $body eq 'Message killed';
+
+    return;
+}
