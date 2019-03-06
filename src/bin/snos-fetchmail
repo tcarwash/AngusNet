@@ -6,11 +6,15 @@ use v5.10;
 use autodie ':all';
 
 use Data::Dumper;
+use Email::Address;
 use File::Temp 'tempfile';
 use HTML::TreeBuilder;
 use HTTP::Cookies;
 use LWP::UserAgent;
+use Net::SMTP;
 use URI::URL;
+
+use constant SMTP_SERVER => 'localhost';
 
 main();
 
@@ -20,47 +24,67 @@ sub main {
     my $base_url = URI->new($url_string);
     our $UA = make_agent();
 
-    print STDERR "Logging in to $base_url: ";
+    log_line($base_url, "Logging in as $callsign");
     login($base_url, $callsign, $password);
-    say STDERR "done";
 
-    print STDERR "Getting message list: ";
+    log_line($base_url, "Getting message list");
     my @messages = list($base_url);
-    @messages = grep { $_->{to} eq 'KG7OEM' } @messages;
-    say STDERR scalar(@messages), " found";
+    @messages = grep { $_->{to} eq uc($callsign) } @messages;
+    my @message_ids = map { $_->{id} } @messages;
+    log_line($base_url, "Found ", scalar(@messages), " messages: ", join(' ', @message_ids));
 
     return 0 unless @messages;
 
-    print STDERR "Getting messages: ";
     foreach my $message (@messages) {
         my $fh = tempfile();
         my $id = $message->{id};
-        print STDERR "$id ";
+        log_line($base_url, "Downloading message $id");
 
         my $content = get_message($base_url, $id);
-        $content = rewrite_headers($callsign, $content);
+        my $from = get_from($content);
 
-        # first open sendmail then delete the message
-        # so we know the message can actually go somewhere
-        # before it is removed
-        # FIXME this should be done in a way that does not
-        # involve string interpolation
-        open(my $sendmail_fh, '|-', "sendmail -bm $callsign");
+        log_line($base_url, "Got message");
+        say STDERR $content;
+
+        log_line($base_url, "Connecting to SMTP server ", SMTP_SERVER);
+        my $smtp = Net::SMTP->new(SMTP_SERVER);
+        $smtp->mail($from);
+        $smtp->to($callsign);
+
+        log_line($base_url, "Killing message $id");
+        # FIXME start the SMTP delivery first then kill the message
+        # so there is a really good chance talking to the SMTP
+        # server wont fail and the message is deleted before it
+        # moves along. But don't deliver first or a failure during
+        # delete will generate duplicates.
+        # This isn't good enough long term.
         kill_message($base_url, $id);
 
-        print $sendmail_fh $content;
-        close($sendmail_fh);
+        log_line($base_url, "Sending message to SMTP server");
+        $smtp->data($content);
+
+        log_line($base_url, "Done with message $id");
     }
 }
 
-sub rewrite_headers {
-    my ($callsign, $content) = @_;
+sub log_line {
+    my ($url, @line) = @_;
 
-    unless ($content =~ s/^(To: $callsign)@.+/$1/im) {
-        die "could not rewrite To header";
+    say STDERR "$url ", join('', @line);
+}
+
+sub get_from {
+    my ($content) = @_;
+
+    unless ($content =~ m/^From: (.+)/m) {
+        die "could not find From: header";
     }
 
-    return $content;
+    my $from_line = $1;
+    my @parsed = Email::Address->parse($from_line);
+    die "expected to find 1 email address" unless @parsed == 1;
+
+    return $parsed[0]->address;
 }
 
 sub make_agent {
@@ -134,13 +158,20 @@ sub get_message {
 
     my @header = $tree->look_down(_tag => 'pre', class => 'msghdr');
     die "invalid number of msghdr" unless @header == 1;
-    my $header_text = $header[0]->as_text;
+    my $header_text = fix_whitespace($header[0]->as_text);
 
     my @body = $tree->look_down(_tag => 'pre', class => 'msgbody');
     die "invalid number of msgbody" unless @body == 1;
-    my $body_text = $body[0]->as_text;
+    my $body_text = fix_whitespace($body[0]->as_text);
 
-    return $header_text . " " . $body_text;
+    my $buf = join('', $header_text, "\n", $body_text, "\n");
+    return $buf;
+}
+
+sub fix_whitespace {
+    my ($content) = @_;
+    $content =~ s/^.*\n// or die "unexpected whitespace";
+    return $content;
 }
 
 sub kill_message {
