@@ -30,6 +30,7 @@ sub main {
     log_line($base_url, "Getting message list");
     my @messages = list($base_url);
     @messages = grep { $_->{to} eq uc($callsign) } @messages;
+    @messages = sort { $a->{id} <=> $b->{id} } @messages;
     my @message_ids = map { $_->{id} } @messages;
     log_line($base_url, "Found ", scalar(@messages), " messages: ", join(' ', @message_ids));
 
