@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -e
+set -x
+
+SOURCE_DIR="$(dirname $0)/../src"
+
+PREFIX="/usr/local"
+SBIN_DIR="$PREFIX/sbin"
+BIN_DIR="$PREFIX/bin"
+
+cp -v "$SOURCE_DIR/bin/"* "$BIN_DIR"
+cp -v "$SOURCE_DIR/sbin/"* "$SBIN_DIR"
