@@ -1,0 +1,101 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use v5.10;
+use autodie ':all';
+
+use Data::Dumper;
+use IPC::Run qw(run);
+use Net::IPAddress::Filter;
+
+use constant HWTYPE => 'ax25';
+use constant ARP_COMMAND => qw(arp -n);
+use constant VTYSH_COMMAND => qw(vtysh);
+use constant AMPR_SUBNET => '44.0.0.0/8';
+use constant SLEEP_TIME => 5;
+
+main();
+
+sub main {
+    my ($my_ip) = @ARGV;
+
+    die "must specify your AMPR IP" unless @ARGV == 1;
+
+    while(1) {
+        my %known_ips = get_arp();
+        update_quagga($my_ip, %known_ips);
+
+        sleep(SLEEP_TIME);
+    }
+}
+
+sub update_quagga {
+    my ($my_ip, %ips) = @_;
+    my $config = make_quagga_config($my_ip, %ips);
+    my $output;
+
+    unless (run([VTYSH_COMMAND], \$config, \$output)) {
+        say STDERR "quagga config:";
+        print STDERR $config;
+        die "could not run command: " . join(' ', VTYSH_COMMAND);
+    }
+
+    return;
+}
+
+sub make_quagga_config {
+    my ($my_ip, %ips) = @_;
+    my @config = ("config terminal");
+
+    foreach my $ip (keys %ips) {
+        if (defined $ips{$ip}) {
+            push(@config,
+                "ip route $ip/32 $my_ip",
+                "router rip",
+                "neighbor $ip",
+                "exit",
+            );
+        } else {
+            push(@config,
+                "no ip route $ip/32 $my_ip",
+                "router rip",
+                "no neighbor $ip",
+                "exit",
+            );
+        }
+    }
+
+    push(@config, "end", "write");
+    return join("\n", @config) . "\n";
+}
+
+sub get_arp {
+    my @command = ARP_COMMAND;
+    my $filter = Net::IPAddress::Filter->new;
+    my ($input, $output);
+    my %found_ips;
+
+    $filter->add_range(AMPR_SUBNET);
+
+    run(\@command, \$input, \$output);
+    my @lines = split("\n", $output);
+
+    my $header = shift(@lines);
+    die "invalid header: $header" unless $header =~ m/^Address\s/;
+
+    foreach my $line (@lines) {
+        my @parts = split(/\s+/, $line);
+        my $ip = $parts[0];
+
+        next unless $filter->in_filter($ip);
+
+        if ($parts[1] eq '(incomplete)') {
+            $found_ips{$ip} = undef;
+        } elsif ($parts[1] eq HWTYPE) {
+            $found_ips{$ip} = $parts[2];
+        }
+    }
+
+    return %found_ips;
+}
