@@ -1,5 +1,11 @@
 #!/usr/bin/env perl
 
+# debian packages:
+#   libemail-address-perl libhtml-tree-perl libwww-perl libipc-run-perl
+#
+# cpan packages:
+#   Net::Domain
+
 use strict;
 use warnings;
 use v5.10;

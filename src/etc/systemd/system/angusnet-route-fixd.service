@@ -2,7 +2,7 @@
 Description=AMPR route fixer
 
 [Service]
-ExecStart=/usr/local/sbin/ampr-route-fixd
+ExecStart=/usr/local/sbin/angusnet-route-fixd
 Restart=always
 
 [Install]
