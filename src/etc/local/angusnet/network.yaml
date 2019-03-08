@@ -2,4 +2,4 @@
 
 mtu: 1024
 rtt: 1.5s
-window: 4096
+window: 2048
