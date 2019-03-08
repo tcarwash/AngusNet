@@ -1,26 +1,33 @@
 #!/usr/bin/env perl
 
+# needed from apt:
+#   libyaml-perl libfile-slurp-perl libipc-system-simple-perl
+#
+# needed from cpan:
+#   Net::IPAddress::Filter
+
 use strict;
 use warnings;
 use v5.10;
 use autodie ':all';
 
 use Data::Dumper;
+use File::Slurp;
 use IPC::System::Simple qw(capture);
 use Net::IPAddress::Filter;
+use YAML qw(LoadFile);
 
 use constant ROUTE_SHOW_CMD => qw(ip route show);
 use constant ROUTE_CHANGE_CMD => qw(ip route change);
 use constant AMPR_SUBNET => "44.0.0.0/8";
-
-use constant MTU_VALUE => 255;
-use constant SRC_VALUE => "44.24.173.239";
-use constant RTT_VALUE => '1.5s';
-use constant WINDOW_VALUE => 2048;
+use constant NETWORK_CONF => '/etc/local/angusnet/network.yaml';
+use constant IPADDR_CONF => '/etc/local/angusnet/ampr-address';
 
 main();
 
 sub main {
+    my $conf = read_config(NETWORK_CONF);
+    my $ampr_ip = read_ip(IPADDR_CONF);
     my $ampr_subnet = make_filter();
 
     while(1) {
@@ -35,10 +42,10 @@ sub main {
             $mask = '32' unless defined $mask;
             next unless $ampr_subnet->in_filter($ip);
 
-            $need_update = 1 if update_or_add_option(src => SRC_VALUE, \@parts);
-            $need_update = 1 if update_or_add_option(rtt => RTT_VALUE, \@parts);
-            $need_update = 1 if update_or_add_option(mtu =>  MTU_VALUE, \@parts);
-            $need_update = 1 if update_or_add_option(window => WINDOW_VALUE, \@parts);
+            $need_update = 1 if update_or_add_option(src => $ampr_ip, \@parts);
+            $need_update = 1 if update_or_add_option(rtt => $conf->{rtt}, \@parts);
+            $need_update = 1 if update_or_add_option(mtu =>  $conf->{mtu}, \@parts);
+            $need_update = 1 if update_or_add_option(window => $conf->{window}, \@parts);
 
             if ($need_update) {
                 my @command = (ROUTE_CHANGE_CMD, @parts);
@@ -51,6 +58,24 @@ sub main {
     }
 
     exit(0);
+}
+
+sub read_config {
+    my ($path) = @_;
+    my $conf = LoadFile($path);
+
+    for my $key (qw(rtt window mtu)) {
+        die "$path: missing $key" unless defined $conf->{$key};
+    }
+
+    return $conf;
+}
+
+sub read_ip {
+    my ($file) = @_;
+    my $contents = read_file($file);
+    chomp $contents;
+    return $contents;
 }
 
 sub get_routes {
