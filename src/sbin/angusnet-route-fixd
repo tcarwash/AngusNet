@@ -1,0 +1,101 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use v5.10;
+use autodie ':all';
+
+use Data::Dumper;
+use IPC::System::Simple qw(capture);
+use Net::IPAddress::Filter;
+
+use constant ROUTE_SHOW_CMD => qw(ip route show);
+use constant ROUTE_CHANGE_CMD => qw(ip route change);
+use constant AMPR_SUBNET => "44.0.0.0/8";
+
+use constant MTU_VALUE => 255;
+use constant SRC_VALUE => "44.24.173.239";
+use constant RTT_VALUE => '1.5s';
+use constant WINDOW_VALUE => 2048;
+
+main();
+
+sub main {
+    my $ampr_subnet = make_filter();
+
+    while(1) {
+        foreach my $route (get_routes()) {
+            my $need_update = 0;
+            my @parts = split(/\s+/, $route);
+            my $dest = $parts[0];
+
+            next if $dest eq 'default';
+            die "could not parse network address '$dest'" unless $dest =~ m,^([^/]+)(/(.+))?,;
+            my ($ip, $mask) = ($1, $3);
+            $mask = '32' unless defined $mask;
+            next unless $ampr_subnet->in_filter($ip);
+
+            $need_update = 1 if update_or_add_option(src => SRC_VALUE, \@parts);
+            $need_update = 1 if update_or_add_option(rtt => RTT_VALUE, \@parts);
+            $need_update = 1 if update_or_add_option(mtu =>  MTU_VALUE, \@parts);
+            $need_update = 1 if update_or_add_option(window => WINDOW_VALUE, \@parts);
+
+            if ($need_update) {
+                my @command = (ROUTE_CHANGE_CMD, @parts);
+                say STDERR scalar(localtime), " ", join(" ", @command);
+                system(@command);
+            }
+        }
+
+        sleep(1);
+    }
+
+    exit(0);
+}
+
+sub get_routes {
+    my @routes;
+
+    foreach my $route (split("\n", capture(ROUTE_SHOW_CMD))) {
+        $route =~ s/\s+$//;
+        push(@routes, $route);
+    }
+
+    return @routes;
+}
+
+sub make_filter {
+    my $filter = Net::IPAddress::Filter->new;
+    $filter->add_range(AMPR_SUBNET);
+    return $filter;
+}
+
+sub update_or_add_option {
+    my ($token_match, $value_match, $parts_ref) = @_;
+    my $need_update = 0;
+    my $found_token = 0;
+    my $parts_size = scalar(@$parts_ref);
+
+    for (my $i = 0; $i < $parts_size - 1; $i++) {
+        my $token = $$parts_ref[$i];
+
+        if ($token eq $token_match) {
+            my $value = $$parts_ref[$i + 1];
+            die "expected to find a value" unless defined $value;
+
+            $found_token = 1;
+
+            if ($value ne $value_match) {
+                $$parts_ref[$i + 1] = $value_match;
+                $need_update = 1;
+            }
+        }
+    }
+
+    if (! $found_token) {
+        push(@$parts_ref, $token_match, $value_match);
+        $need_update = 1;
+    }
+
+    return $need_update;
+}

@@ -1,0 +1,9 @@
+[Unit]
+Description=AMPR route fixer
+
+[Service]
+ExecStart=/usr/local/sbin/ampr-route-fixd
+Restart=always
+
+[Install]
+WantedBy=network.target
