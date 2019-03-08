@@ -8,6 +8,7 @@ use autodie ':all';
 use Data::Dumper;
 use IPC::Run qw(run);
 use Net::IPAddress::Filter;
+use Net::Interface;
 
 use constant HWTYPE => 'ax25';
 use constant ARP_COMMAND => qw(arp -n);
@@ -20,19 +21,17 @@ main();
 sub main {
     my ($my_ip) = @ARGV;
 
-    die "must specify your AMPR IP" unless @ARGV == 1;
-
     while(1) {
         my %known_ips = get_arp();
-        update_quagga($my_ip, %known_ips);
+        update_quagga(%known_ips);
 
         sleep(SLEEP_TIME);
     }
 }
 
 sub update_quagga {
-    my ($my_ip, %ips) = @_;
-    my $config = make_quagga_config($my_ip, %ips);
+    my (%ips) = @_;
+    my $config = make_quagga_config(%ips);
     my $output;
 
     unless (run([VTYSH_COMMAND], \$config, \$output)) {
@@ -45,11 +44,16 @@ sub update_quagga {
 }
 
 sub make_quagga_config {
-    my ($my_ip, %ips) = @_;
+    my (%ips) = @_;
+    my %interface_ips = get_interface_ips();
     my @config = ("config terminal");
 
     foreach my $ip (keys %ips) {
-        if (defined $ips{$ip}) {
+        my $has_hw_address = $ips{$ip}->[0];
+        my $interface_name = $ips{$ip}->[1];
+        my $my_ip = $interface_ips{$interface_name};
+
+        if ($has_hw_address) {
             push(@config,
                 "ip route $ip/32 $my_ip",
                 "router rip",
@@ -68,6 +72,18 @@ sub make_quagga_config {
 
     push(@config, "end", "write");
     return join("\n", @config) . "\n";
+}
+
+sub get_interface_ips {
+    my %by_interface;
+
+    foreach my $interface (Net::Interface->interfaces) {
+        my @addresses = $interface->address;
+        next unless @addresses;
+        $by_interface{$interface} = Net::Interface::inet_ntoa($addresses[0]);
+    }
+
+    return %by_interface;
 }
 
 sub get_arp {
@@ -91,9 +107,9 @@ sub get_arp {
         next unless $filter->in_filter($ip);
 
         if ($parts[1] eq '(incomplete)') {
-            $found_ips{$ip} = undef;
+            $found_ips{$ip} = [0, $parts[2]];
         } elsif ($parts[1] eq HWTYPE) {
-            $found_ips{$ip} = $parts[2];
+            $found_ips{$ip} = [1, $parts[4]];
         }
     }
 
