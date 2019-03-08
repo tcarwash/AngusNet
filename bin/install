@@ -8,6 +8,8 @@ SOURCE_DIR="$(dirname $0)/../src"
 PREFIX="/usr/local"
 SBIN_DIR="$PREFIX/sbin"
 BIN_DIR="$PREFIX/bin"
+ETC_DIR="/etc/local/angusnet";
 
+mkdir -p "$ETC_DIR"
 cp -v "$SOURCE_DIR/bin/"* "$BIN_DIR"
 cp -v "$SOURCE_DIR/sbin/"* "$SBIN_DIR"
