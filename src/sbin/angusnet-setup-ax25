@@ -3,8 +3,13 @@
 set -x
 set -e
 
-AX25_NAME="ic7100"
+AX25_NAME="$1"
 AX25_INT="ax0"
+
+if [ "$AX25_NAME" == "" ]; then
+    echo "Usage: $(basename $0) <ax25 port name>" >&2
+    exit 1
+fi
 
 #modprobe netrom
 
