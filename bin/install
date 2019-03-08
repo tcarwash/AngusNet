@@ -13,3 +13,5 @@ ETC_DIR="/etc/local/angusnet";
 mkdir -p "$ETC_DIR"
 cp -v "$SOURCE_DIR/bin/"* "$BIN_DIR"
 cp -v "$SOURCE_DIR/sbin/"* "$SBIN_DIR"
+
+cp -rv "$SOURCE_DIR/lib"/* /lib/
