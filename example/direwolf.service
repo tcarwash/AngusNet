@@ -2,7 +2,7 @@
 Description=Direwolf Packet Modem
 
 [Service]
-ExecStart=/usr/bin/nice -n -10 /usr/bin/direwolf -p -c /etc/local/hamradio/direwolf.conf
+ExecStart=/usr/bin/nice -n -10 /usr/bin/direwolf -p -c /etc/local/angusnet/direwolf.conf
 ExecStartPost=/bin/sleep 1
 ExecStartPost=/usr/local/sbin/angusnet-setup-ax25 ic7100
 Restart=always
