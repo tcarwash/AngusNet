@@ -1,0 +1,77 @@
+#!/usr/bin/env perl
+
+# Output files to help with managing DNS
+
+# debian packages required:
+#   libfile-slurp-perl
+
+# TODO
+# * output file in DNS zone or /etc/hosts format based on argument
+# * validate the contents of the files
+
+use strict;
+use warnings;
+use v5.10;
+
+use File::Slurp;
+
+use constant HOSTS_PATH => '/etc/hosts';
+use constant ANGUSNET_START => '#angusnet start';
+use constant ANGUSNET_END => '#angusnet end';
+
+main();
+
+sub main {
+    my @host_files = @ARGV;
+    die "must specify one or more input files" unless @host_files;
+
+    my $content = create_hosts();
+    update_hosts($content);
+}
+
+sub create_hosts {
+    my $buf = ANGUSNET_START . "\n";
+
+    while(<>) {
+        # output comments as is
+        if (/^\s*#/) {
+            $buf .= $_;
+        } else {
+            chomp;
+            $buf .= "$_.angus\n";
+        }
+    }
+
+    $buf .= ANGUSNET_END . "\n";
+
+    return $buf;
+}
+
+sub update_hosts {
+    my ($new_angusnet) = @_;
+    my @existing = split("\n", read_file(HOSTS_PATH));
+    my $start_index = find_index(ANGUSNET_START, @existing);
+
+    if (! defined $start_index) {
+         my $new_file = join("\n", @existing, '', $new_angusnet);
+         write_file(HOSTS_PATH, $new_file);
+    } else {
+        my $end_index = find_index(ANGUSNET_END, @existing);
+        die "could not find " . ANGUSNET_END unless defined $end_index;
+            chomp($new_angusnet);
+            splice(@existing, $start_index, $end_index - $start_index + 1, $new_angusnet);
+            my $new_file = join("\n", @existing, '');
+            write_file(HOSTS_PATH, $new_file);
+    }
+
+    return;
+}
+
+sub find_index {
+    my ($token, @lines) = @_;
+    for(my $i = 0; $i < scalar(@lines); $i++) {
+        return $i if $lines[$i] eq $token;
+    }
+
+    return undef;
+}
