@@ -1,2 +1,9 @@
 #44.26.1.248/29 AG7EW Portland, OR CN85pl
-44.26.1.248 ag7ew
+#Network Address        44.26.1.248
+#Broadcast Address      44.26.1.255
+44.26.1.249     6m.ag7ew.ampr.org               6m.ag7ew
+44.26.1.250     2m.ag7ew.ampr.org               2m.ag7ew
+44.26.1.251     70cm.ag7ew.ampr.org             70cm.ag7ew
+44.26.1.252     mobile.ag7ew.ampr.org           mobile.ag7ew
+44.26.1.253     tele.ag7ew.ampr.org             tele.ag7ew
+44.26.1.254     ag7ew.ampr.org                  ag7ew
