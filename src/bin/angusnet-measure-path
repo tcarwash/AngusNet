@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+set -e
+
+COUNT=25
+
+echo "Measuring path quality with $COUNT pings (use -c to change count)"
+exec amprping -c "$COUNT" "$@"
