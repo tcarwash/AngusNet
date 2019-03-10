@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -e
+set -x
+
+PROJECT_ROOT="$(dirname $0)/.."
+BIN="$PROJECT_ROOT/bin"
+SRC="$PROJECT_ROOT/src"
+
+cp "$SRC/etc/local/angusnet/network.yaml" "/etc/local/angusnet/"
+systemctl restart angusnet-route-fixd
+"$BIN/update-hosts" "$PROJECT_ROOT/networks/"*
