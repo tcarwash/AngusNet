@@ -5,6 +5,9 @@ interface ax0
 ! with the rest of the network. Set the IP
 ! address of the interface here
  ip address <your IP>/8
+! the IP must be listed twice with a /32 netmask
+! or quagga will not advertise the node
+ ip address <your IP>/32
 !
 router rip
 ! the default timing would kill the
@@ -14,8 +17,6 @@ router rip
 ! are defined inside quagga
  redistribute static
  network 44.0.0.0/8
- ! broadcast packets cause lots of problems
- passive-interface ax0
 ! Filter the routes that are sent and learned
  distribute-list amprnet in ax0
  distribute-list amprnet out ax0
