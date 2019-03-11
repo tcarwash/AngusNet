@@ -9,4 +9,4 @@ if ! [ -e /proc/net/nr_neigh ]; then
     exit 1
 fi
 
-exec cat /proc/net/nr_neigh
+exec cat /proc/net/nr_nodes
