@@ -1,5 +1,8 @@
 #!/usr/bin/env perl
 
+# debian packages:
+#   libfile-slurp-perl
+
 use strict;
 use warnings;
 use v5.10;
@@ -8,9 +11,7 @@ use autodie;
 main();
 
 sub main {
-    $/ = "\r\n";
-
-    BBS->run();
+    BBS->run(user => 'nobody', group => 'nogroup', port => 23);
 }
 
 package BBS;
@@ -20,57 +21,60 @@ use warnings;
 use v5.10;
 use autodie;
 
-use Net::Server::INET;
+use File::Slurp;
+use Net::Server::Fork;
 
-use base qw(Net::Server::INET);
+use base qw(Net::Server::Fork);
 
-use constant WELCOME_FILE => '/etc/local/angusnet/node-info.welcome.txt';
-use constant PROMPT => '? for help>';
-use constant COMMAND_HANDLERS => {
-    '?' => \&command_help,
-};
+use constant INFO_PATH => '/etc/local/angusnet/nodeinfo.txt';
 
 sub process_request {
     my ($self) = @_;
-    my $command;
 
-    while(defined($command = prompt())) {
-        if ($command eq 'bye') {
-            last;
-        }
-
-        my $handler = COMMAND_HANDLERS->{$command};
-
-        if (defined $handler) {
-            $handler->();
-        } else {
-            bad_command($command);
-        }
+    if (-e INFO_PATH) {
+        say read_file(INFO_PATH);
     }
 
-    say "Goodbye";
-    exit(0);
+    wrap_command("System time: ", qw(date));
+    wrap_command("AX25 IP neighbors:\n", qw(angusnet-show-ampr-neighbors));
+    wrap_command("NetRom neighbors:\n", qw(angusnet-show-netrom-neighbors));
+    wrap_command("NetRom nodes:\n", qw(angusnet-show-netrom-nodes));
+    wrap_command("Kernel routing table:\n", qw(angusnet-show-ampr-route));
+    wrap_command("RIP route status:\n", qw(angusnet-show-ip-rip));
+    wrap_command("RIP route status\n", qw(angusnet-show-ip-rip-status));
+    wrap_command("Routing daemon status:\n", qw(angusnet-show-ip-route));
+
+    say "End of node info";
+    return;
 }
 
-sub prompt {
-    print PROMPT, ' ';
-
-    my $input = <STDIN>;
-    return undef unless defined $input;
-
-    chomp($input);
-    return $input;
-}
-
-sub bad_command {
-    my ($command) = @_;
-    say "Error: invalid command '$command'";
+sub wrap_command {
+    my ($prefix, @command) = @_;
+    print $prefix;
+    system(@command);
     say '';
+    return;
 }
 
-sub command_help {
-    say "Commands:";
-    say "? Get this help info";
-    say "bye logout";
-    say '';
-}
+# sub prompt {
+#     print PROMPT, ' ';
+
+#     my $input = <STDIN>;
+#     return undef unless defined $input;
+
+#     chomp($input);
+#     return $input;
+# }
+
+# sub bad_command {
+#     my ($command) = @_;
+#     say "Error: invalid command '$command'";
+#     say '';
+# }
+
+# sub command_help {
+#     say "Commands:";
+#     say "? Get this help info";
+#     say "bye logout";
+#     say '';
+# }
