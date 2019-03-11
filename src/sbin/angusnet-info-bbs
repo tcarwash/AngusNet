@@ -44,7 +44,8 @@ sub process_request {
     wrap_command("RIP route status\n", qw(angusnet-show-ip-rip-status));
     wrap_command("Routing daemon status:\n", qw(angusnet-show-ip-route));
 
-    say "End of node info";
+    say "End of node info. Press enter to exit.";
+    <STDIN>;
     return;
 }
 
