@@ -79,8 +79,8 @@ use constant COMMAND_HANDLERS => {
 };
 
 use constant COW_PROGRAMS => {
-    say => '/usr/games/cowsay',
-    think => '/usr/games/cowthink',
+    say => 'cowsay',
+    think => 'cowthink',
 };
 
 sub new {
@@ -167,6 +167,7 @@ sub command_help {
     say "  ? or help: Get this help info";
     say "  bye: logout";
     say "  info: get a text description of this system";
+    say "  cow: tell a cow to do things";
 
     foreach my $menu_name (sort keys $CONFIG->{menu}->%*) {
         say "  $menu_name: ", $CONFIG->{menu}->{$menu_name}->{messages}->{help};
