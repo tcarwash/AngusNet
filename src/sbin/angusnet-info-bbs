@@ -97,6 +97,7 @@ sub run_session {
 
     # more puts less load on the network
     $ENV{PAGER} = "more";
+    $ENV{PATH} = "$ENV{PATH}:/usr/games";
 
     say "AngusBBS v", VERSION;
     say "Enable linemode in your telnet client for best experience.";
