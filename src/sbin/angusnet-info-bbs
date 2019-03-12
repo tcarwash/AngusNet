@@ -61,6 +61,7 @@ use autodie;
 use Data::Dumper;
 use File::Slurp;
 
+use constant VERSION => '0.0.1';
 use constant INFO_PATH => '/etc/local/angusnet/nodeinfo.txt';
 use constant PROMPT => '? for help> ';
 use constant COMMAND_HANDLERS => {
@@ -103,9 +104,13 @@ sub new {
 sub run_session {
     my ($self) = @_;
     our $SESSION_RUNNING = 1;
+    our $VERSION;
 
     # more puts less load on the network
     $ENV{PAGER} = "more";
+
+    say "AngusBBS v", VERSION;
+    say "Enable linemode in your telnet client for best experience.";
 
     while($SESSION_RUNNING) {
         my (@input) = prompt();
