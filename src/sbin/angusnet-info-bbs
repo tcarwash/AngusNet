@@ -1,7 +1,11 @@
 #!/usr/bin/env perl
 
+# this is intended to be run through in.telnetd as a replacement
+# for login with telnetd running as nobody, example inetd.conf:
+# telnet stream tcp nowait nobody /usr/sbin/tcpd /usr/sbin/in.telnetd -L /usr/local/sbin/angusnet-info-bbs
+
 # debian packages:
-#   libfile-slurp-perl libnet-server-perl
+#   libfile-slurp-perl
 
 use strict;
 use warnings;
@@ -12,24 +16,26 @@ use Data::Dumper;
 use File::Basename;
 use Getopt::Long;
 
-use constant DEFAULT_PORT => 23;
-
 main();
 
 sub main {
-    my %conf = parse_args();
+    # ignored for now - just here for compat with in.telnetd
+    my %args = parse_args();
+    my $bbs = BBS->new;
 
-    $conf{port} = DEFAULT_PORT unless defined $conf{port};
-
-    BBS::Daemon->run(port => $conf{port}, user => 'nobody', group => 'nogroup');
+    $bbs->run_session;
+    exit(0);
 }
 
 sub parse_args {
     my %args;
 
     GetOptions(
-        "port|p=i" => \$args{port},
-    ) or die usage();
+        "p" => \$args{preserve},
+        "h=s" => \$args{host},
+    ) or usage();
+
+    usage() if @ARGV;
 
     return %args;
 }
@@ -38,12 +44,14 @@ sub usage {
     my $basename = basename($0);
 
     say STDERR "Usage:";
-    say STDERR "  $basename [--port <port>]";
+    say STDERR "  $basename [-p] [-h <hostname>] <username>";
+    say STDERR "  like /usr/bin/login but all switches are ignored";
+    say STDERR "  specifying a username generates a fatal error";
 
     exit(1);
 }
 
-package BBS::Daemon;
+package BBS;
 
 use strict;
 use warnings;
@@ -52,6 +60,7 @@ use autodie;
 
 use Data::Dumper;
 use File::Slurp;
+use IO::Socket::Telnet;
 use Net::Server::Fork;
 
 use base qw(Net::Server::Fork);
@@ -83,7 +92,7 @@ use constant GAME_PROGRAMS => {
     gofish => '/usr/games/go-fish',
 };
 
-sub process_request {
+sub run_session {
     my ($self) = @_;
     our $SESSION_RUNNING = 1;
 
