@@ -15,15 +15,15 @@ use autodie;
 use Data::Dumper;
 use File::Basename;
 use Getopt::Long;
+use Sys::Hostname;
 
 main();
 
 sub main {
-    # ignored for now - just here for compat with in.telnetd
     my %args = parse_args();
     my $bbs = BBS->new;
 
-    $bbs->run_session;
+    $bbs->run_session(%args);
     exit(0);
 }
 
@@ -31,11 +31,14 @@ sub parse_args {
     my %args;
 
     GetOptions(
+        "dev" => \$args{dev},
         "p" => \$args{preserve},
         "h=s" => \$args{host},
     ) or usage();
 
-    usage() if @ARGV;
+    usage() if @ARGV > 1;
+
+    $args{dev} = 0 unless defined $args{dev};
 
     return %args;
 }
@@ -44,9 +47,11 @@ sub usage {
     my $basename = basename($0);
 
     say STDERR "Usage:";
-    say STDERR "  $basename [-p] [-h <hostname>] <username>";
-    say STDERR "  like /usr/bin/login but all switches are ignored";
-    say STDERR "  specifying a username generates a fatal error";
+    say STDERR "  $basename [--dev] [-p] [-h <hostname>] <username>";
+    say STDERR "";
+    say STDERR "  --dev runs a standalone copy outside in.telnetd for dev work";
+    say STDERR "  -p is ignored for compatibility with login";
+    say STDERR "  -h <hostname> is ignored for compatibility with login";
 
     exit(1);
 }
@@ -60,12 +65,13 @@ use autodie;
 
 use Data::Dumper;
 use File::Slurp;
+use Sys::Hostname;
 use YAML qw(LoadFile);
 
 use constant VERSION => '0.0.1';
 use constant INFO_PATH => '/etc/local/angusnet/nodeinfo.txt';
 use constant CONFIG_PATH => '/etc/local/angusnet/angusnet-info-bbs.yaml';
-use constant PROMPT => '? for help> ';
+use constant PROMPT_CALLSIGN => 'Callsign: ';
 
 use constant COMMAND_HANDLERS => {
     '?' => \&command_help,
@@ -89,19 +95,53 @@ sub new {
 }
 
 sub run_session {
-    my ($self) = @_;
+    my ($self, %args) = @_;
     our $CONFIG = load_config(CONFIG_PATH);
     my $handlers = make_handlers();
     our $SESSION_RUNNING = 1;
-    our $VERSION;
+    our $CALLSIGN;
+
+    $| = 1; print '';
 
     foreach my $env (keys $CONFIG->{environment}->%*) {
         $ENV{$env} = $CONFIG->{environment}->{$env};
     }
 
+    unless ($args{dev}) {
+        # disable SIGINT so ctrl+c does not kill the
+        # BBS
+        $SIG{INT} = 'IGNORE';
+    }
+
+    if (@ARGV == 1) {
+        my $got_call = uc($ARGV[0]);
+        die "invalid callsign" unless is_valid_callsign($got_call);
+        $CALLSIGN = $got_call;
+    } else {
+        while(1) {
+            my $got_call = prompt_callsign();
+            last unless defined $got_call;
+
+            unless(is_valid_callsign($got_call)) {
+                say "Invalid callsign '$got_call'";
+                next;
+            }
+
+            $CALLSIGN = $got_call;
+            last;
+        }
+    }
+
+    unless (defined $CALLSIGN) {
+        say "Can not start session with out a call sign";
+        return;
+    }
+
     say "AngusBBS v", VERSION;
     say "Enable linemode in your telnet client for best experience.";
     say "If you get ^M when you press enter try enabling line mode one more time.";
+    say "Help is available via ? or help";
+    say "";
 
     while($SESSION_RUNNING) {
         my (@input) = prompt();
@@ -119,6 +159,17 @@ sub run_session {
             bad_command($command);
         }
     }
+
+    say "Ending session";
+}
+
+sub is_valid_callsign {
+    my ($callsign) = @_;
+
+    return 0 unless defined $callsign;
+    # from wikipedia
+    return 0 unless $callsign =~ m/^[A-Z0-9]{1,}[0-9][A-Z0-9]{1,4}$/;
+    return 1;
 }
 
 sub load_config {
@@ -141,17 +192,29 @@ sub make_handlers {
 }
 
 sub prompt {
-    our $SESSION_RUNNING = 1;
+    our $CALLSIGN;
+    my $hostname = hostname();
 
-    print PROMPT;
+    print "$CALLSIGN\@$hostname> ";
 
     my $input = <STDIN>;
     return undef unless defined $input;
+    return split(/\s+/, strip_whitespace_head_tail($input));
+}
 
-    $input =~ s/^\s+//;
-    $input =~ s/\s+$//;
+sub prompt_callsign {
+    print PROMPT_CALLSIGN;
 
-    return split(/\s+/, $input);
+    my $input = <STDIN>;
+    return undef unless defined $input;
+    return uc(strip_whitespace_head_tail($input));
+}
+
+sub strip_whitespace_head_tail {
+    my ($string) = @_;
+    $string =~ s/^\s+//;
+    $string =~ s/\s+$//;
+    return $string;
 }
 
 sub bad_command {
@@ -178,7 +241,6 @@ sub command_help {
 
 sub command_bye {
     our $SESSION_RUNNING = 0;
-    say "Logging out";
 }
 
 sub command_info {
