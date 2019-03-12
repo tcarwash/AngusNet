@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 
 # debian packages:
-#   libfile-slurp-perl
+#   libfile-slurp-perl libnet-server-perl
 
 use strict;
 use warnings;
