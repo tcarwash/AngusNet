@@ -6,6 +6,7 @@
 
 # debian packages:
 #   cowsay bsdgames animals libfile-slurp-perl telnetd libyaml-perl
+#   libterm-readline-perl-perl
 
 use strict;
 use warnings;
@@ -66,6 +67,7 @@ use autodie;
 use Data::Dumper;
 use File::Slurp;
 use Sys::Hostname;
+use Term::ReadLine;
 use YAML qw(LoadFile);
 
 use constant VERSION => '0.0.1';
@@ -98,6 +100,7 @@ sub run_session {
     my ($self, %args) = @_;
     our $CONFIG = load_config(CONFIG_PATH);
     my $handlers = make_handlers();
+    our $READLINE = Term::ReadLine->new('AngusBBS');
     our $SESSION_RUNNING = 1;
     our $CALLSIGN;
 
@@ -194,10 +197,9 @@ sub make_handlers {
 sub prompt {
     our $CALLSIGN;
     my $hostname = hostname();
+    our $READLINE;
 
-    print "$CALLSIGN\@$hostname> ";
-
-    my $input = <STDIN>;
+    my $input = $READLINE->readline("$CALLSIGN\@$hostname> ");
     return undef unless defined $input;
     return split(/\s+/, strip_whitespace_head_tail($input));
 }
