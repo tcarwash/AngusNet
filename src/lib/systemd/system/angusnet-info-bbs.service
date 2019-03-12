@@ -1,9 +1,0 @@
-[Unit]
-Description=AMPR route fixer
-
-[Service]
-ExecStart=/usr/local/sbin/angusnet-info-bbs
-Restart=always
-
-[Install]
-WantedBy=network.target

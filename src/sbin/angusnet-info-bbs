@@ -5,7 +5,7 @@
 # telnet stream tcp nowait nobody /usr/sbin/tcpd /usr/sbin/in.telnetd -L /usr/local/sbin/angusnet-info-bbs
 
 # debian packages:
-#   libfile-slurp-perl
+#   cowsay bsdgames animals libfile-slurp-perl telnetd
 
 use strict;
 use warnings;
@@ -60,10 +60,6 @@ use autodie;
 
 use Data::Dumper;
 use File::Slurp;
-use IO::Socket::Telnet;
-use Net::Server::Fork;
-
-use base qw(Net::Server::Fork);
 
 use constant INFO_PATH => '/etc/local/angusnet/nodeinfo.txt';
 use constant PROMPT => '? for help> ';
@@ -71,30 +67,45 @@ use constant COMMAND_HANDLERS => {
     '?' => \&command_help,
     help => \&command_help,
     bye => \&command_bye,
+    exit => \&command_bye,
+    quit => \&command_bye,
+    logout => \&command_bye,
     info => \&command_info,
     show => \&command_show,
     cow => \&command_cow,
     game => \&command_game,
 };
 use constant SHOW_PROGRAMS => {
-    'rip-neighbors' => 'angusnet-show-ip-rip-status',
-    'rip-table' => 'angusnet-show-ip-rip',
-    'ip-neighbors' => 'angusnet-show-ampr-neighbors',
-    'ip-route' => 'angusnet-show-ampr-route',
-    'netrom-neighbors' => 'angusnet-show-netrom-neighbors',
-    'netrom-nodes' => 'angusnet-show-netrom-nodes',
+    'rip-neighbors' => '/usr/local/bin/angusnet-show-ip-rip-status',
+    'rip-table' => '/usr/local/bin/angusnet-show-ip-rip',
+    'ip-neighbors' => '/usr/local/bin/angusnet-show-ampr-neighbors',
+    'ip-route' => '/usr/local/bin/angusnet-show-ampr-route',
+    'netrom-neighbors' => '/usr/local/bin/angusnet-show-netrom-neighbors',
+    'netrom-nodes' => '/usr/local/bin/angusnet-show-netrom-nodes',
 };
 use constant COW_PROGRAMS => {
     say => '/usr/games/cowsay',
     think => '/usr/games/cowthink',
 };
 use constant GAME_PROGRAMS => {
+    adventure => '/usr/games/adventure',
+    animals => '/usr/games/animals',
     gofish => '/usr/games/go-fish',
+    hangman => '/usr/games/hangman',
+    trek => '/usr/games/trek',
 };
+
+sub new {
+    my ($package) = @_;
+    return bless({}, $package);
+}
 
 sub run_session {
     my ($self) = @_;
     our $SESSION_RUNNING = 1;
+
+    # more puts less load on the network
+    $ENV{PAGER} = "more";
 
     while($SESSION_RUNNING) {
         my (@input) = prompt();
@@ -136,11 +147,12 @@ sub bad_command {
 
 sub command_help {
     say "Commands:";
-    say "? or help: Get this help info";
-    say "bye: logout";
-    say "info: get a text description of this system";
-    say "show: get information on the status of this system";
-    say "cow: make a cow do things";
+    say "  ? or help: Get this help info";
+    say "  bye: logout";
+    say "  info: get a text description of this system";
+    say "  show: get information on the status of this system";
+    say "  cow: make a cow do things";
+    say "  game: pick a game to play";
     say '';
 }
 
@@ -213,6 +225,35 @@ sub command_cow__usage {
     say "Usage: ";
     say "  cow say <something to say>";
     say "  cow think <something to think>";
+
+    return;
+}
+
+sub command_game {
+    my ($game_name) = @_;
+
+    unless (defined $game_name) {
+        command_game__usage();
+        return;
+    }
+
+    my $program = GAME_PROGRAMS->{$game_name};
+    unless (defined $program) {
+        say "Invalid game name '$game_name'";
+        command_game__usage();
+        return;
+    }
+
+    system($program);
+}
+
+sub command_game__usage {
+    say "Usage: game <game name>";
+    say "Available games:";
+
+    for my $name (sort keys GAME_PROGRAMS->%*) {
+        say "  $name";
+    }
 
     return;
 }
