@@ -8,74 +8,202 @@ use warnings;
 use v5.10;
 use autodie;
 
+use Data::Dumper;
+use File::Basename;
+use Getopt::Long;
+
+use constant DEFAULT_PORT => 23;
+
 main();
 
 sub main {
-    BBS->run(user => 'nobody', group => 'nogroup', port => 23);
+    my %conf = parse_args();
+
+    $conf{port} = DEFAULT_PORT unless defined $conf{port};
+
+    BBS::Daemon->run(port => $conf{port}, user => 'nobody', group => 'nogroup');
 }
 
-package BBS;
+sub parse_args {
+    my %args;
+
+    GetOptions(
+        "port|p=i" => \$args{port},
+    ) or die usage();
+
+    return %args;
+}
+
+sub usage {
+    my $basename = basename($0);
+
+    say STDERR "Usage:";
+    say STDERR "  $basename [--port <port>]";
+
+    exit(1);
+}
+
+package BBS::Daemon;
 
 use strict;
 use warnings;
 use v5.10;
 use autodie;
 
+use Data::Dumper;
 use File::Slurp;
 use Net::Server::Fork;
 
 use base qw(Net::Server::Fork);
 
 use constant INFO_PATH => '/etc/local/angusnet/nodeinfo.txt';
+use constant PROMPT => '? for help> ';
+use constant COMMAND_HANDLERS => {
+    '?' => \&command_help,
+    help => \&command_help,
+    bye => \&command_bye,
+    info => \&command_info,
+    show => \&command_show,
+    cow => \&command_cow,
+    game => \&command_game,
+};
+use constant SHOW_PROGRAMS => {
+    'rip-neighbors' => 'angusnet-show-ip-rip-status',
+    'rip-table' => 'angusnet-show-ip-rip',
+    'ip-neighbors' => 'angusnet-show-ampr-neighbors',
+    'ip-route' => 'angusnet-show-ampr-route',
+    'netrom-neighbors' => 'angusnet-show-netrom-neighbors',
+    'netrom-nodes' => 'angusnet-show-netrom-nodes',
+};
+use constant COW_PROGRAMS => {
+    say => '/usr/games/cowsay',
+    think => '/usr/games/cowthink',
+};
+use constant GAME_PROGRAMS => {
+    gofish => '/usr/games/go-fish',
+};
 
 sub process_request {
     my ($self) = @_;
+    our $SESSION_RUNNING = 1;
 
-    if (-e INFO_PATH) {
-        say read_file(INFO_PATH);
+    while($SESSION_RUNNING) {
+        my (@input) = prompt();
+
+        # user pushed enter and had nothing but white space
+        next unless @input;
+        my ($command, @args) = @input;
+        # read error
+        last unless defined $command;
+
+        my $handler = COMMAND_HANDLERS->{$command};
+        if (defined $handler) {
+            $handler->(@args);
+        } else {
+            bad_command($command);
+        }
     }
-
-    wrap_command("System time: ", qw(date));
-    wrap_command("AX25 IP neighbors:\n", qw(angusnet-show-ampr-neighbors));
-    wrap_command("NetRom neighbors:\n", qw(angusnet-show-netrom-neighbors));
-    wrap_command("NetRom nodes:\n", qw(angusnet-show-netrom-nodes));
-    wrap_command("Kernel routing table:\n", qw(angusnet-show-ampr-route));
-    wrap_command("RIP route status:\n", qw(angusnet-show-ip-rip));
-    wrap_command("RIP route status\n", qw(angusnet-show-ip-rip-status));
-    wrap_command("Routing daemon status:\n", qw(angusnet-show-ip-route));
-
-    say "End of node info. Press enter to exit.";
-    <STDIN>;
-    return;
 }
 
-sub wrap_command {
-    my ($prefix, @command) = @_;
-    print $prefix;
+sub prompt {
+    our $SESSION_RUNNING = 1;
+
+    print PROMPT;
+
+    my $input = <STDIN>;
+    return undef unless defined $input;
+
+    $input =~ s/^\s+//;
+    $input =~ s/\s+$//;
+
+    return split(/\s+/, $input);
+}
+
+sub bad_command {
+    my ($command) = @_;
+    say "Error: invalid command '$command'";
+    say '';
+}
+
+sub command_help {
+    say "Commands:";
+    say "? or help: Get this help info";
+    say "bye: logout";
+    say "info: get a text description of this system";
+    say "show: get information on the status of this system";
+    say "cow: make a cow do things";
+    say '';
+}
+
+sub command_bye {
+    our $SESSION_RUNNING = 0;
+    say "Logging out";
+}
+
+sub command_info {
+    if (-e INFO_PATH) {
+        say read_file(INFO_PATH);
+    } else {
+        say "no info available";
+    }
+}
+
+sub show_program {
+    my (@command) = @_;
     system(@command);
     say '';
     return;
 }
 
-# sub prompt {
-#     print PROMPT, ' ';
+sub command_show {
+    my ($to_show) = @_;
 
-#     my $input = <STDIN>;
-#     return undef unless defined $input;
+    unless (defined $to_show) {
+        command_show__usage();
+        return;
+    }
 
-#     chomp($input);
-#     return $input;
-# }
+    my $program = SHOW_PROGRAMS->{$to_show};
+    unless (defined $program) {
+        command_show__usage();
+        return;
+    }
 
-# sub bad_command {
-#     my ($command) = @_;
-#     say "Error: invalid command '$command'";
-#     say '';
-# }
+    show_program($program);
+}
 
-# sub command_help {
-#     say "Commands:";
-#     say "? Get this help info";
-#     say "bye logout";
-#     say '';
-# }
+sub command_show__usage {
+    say "Usage:";
+
+    for my $name (sort keys SHOW_PROGRAMS->%*) {
+        say "  show $name";
+    }
+}
+
+sub command_cow {
+    my (@args) = @_;
+
+    if (@args < 2) {
+        command_cow__usage();
+        return;
+    };
+
+    my $verb = shift @args;
+    my $text = join(' ', @args);
+    my $program = COW_PROGRAMS->{$verb};
+
+    if (defined $program) {
+        system($program, $text);
+    } else {
+        command_cow__usage();
+    }
+
+}
+
+sub command_cow__usage {
+    say "Usage: ";
+    say "  cow say <something to say>";
+    say "  cow think <something to think>";
+
+    return;
+}
