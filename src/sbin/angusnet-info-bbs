@@ -100,11 +100,17 @@ sub run_session {
     my ($self, %args) = @_;
     our $CONFIG = load_config(CONFIG_PATH);
     my $handlers = make_handlers();
-    our $READLINE = Term::ReadLine->new('AngusBBS');
     our $SESSION_RUNNING = 1;
     our $CALLSIGN;
 
     $| = 1; print '';
+
+    # SNOS telnet is more like netcat than a telnet protocol
+    # speaker but if the BBS runs out of inetd then the terminal
+    # isn't setup and readline can't work.
+    if (exists $ENV{TERM}) {
+        our $READLINE = Term::ReadLine->new('AngusBBS');
+    }
 
     foreach my $env (keys $CONFIG->{environment}->%*) {
         $ENV{$env} = $CONFIG->{environment}->{$env};
@@ -197,9 +203,17 @@ sub make_handlers {
 sub prompt {
     our $CALLSIGN;
     my $hostname = hostname();
+    my $prompt = "$CALLSIGN\@$hostname> ";
     our $READLINE;
+    my $input;
 
-    my $input = $READLINE->readline("$CALLSIGN\@$hostname> ");
+    if (defined $READLINE) {
+       $input = $READLINE->readline($prompt);
+    } else {
+        print $prompt;
+        $input = <STDIN>;
+    }
+
     return undef unless defined $input;
     return split(/\s+/, strip_whitespace_head_tail($input));
 }
@@ -273,7 +287,7 @@ sub command_cow {
     my $program = COW_PROGRAMS->{$verb};
 
     if (defined $program) {
-        system($program, $text);
+        show_program($program, $text);
     } else {
         command_cow__usage();
     }
