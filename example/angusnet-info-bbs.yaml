@@ -1,0 +1,26 @@
+---
+
+menu:
+  show:
+    messages:
+      help: Get information on the status of this system
+      usage: show <information>
+      list: "Available information:"
+    programs:
+      rip-neighbors: angusnet-show-ip-rip-status
+      rip-table: angusnet-show-ip-rip
+      ip-neighbors: angusnet-show-ampr-neighbors
+      ip-route: angusnet-show-ampr-route
+      netrom-neighbors: angusnet-show-netrom-neighbors
+      netrom-nodes: angusnet-show-netrom-nodes
+  game:
+    messages:
+      help: Pick a game to play
+      usage: game <name of game>
+      list: "Available games:"
+    programs:
+      adventure: adventure
+      animals: animals
+      gofish: go-fish
+      hangman: hangman
+      trek: trek
