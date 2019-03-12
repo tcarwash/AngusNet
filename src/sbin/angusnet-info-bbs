@@ -2,11 +2,13 @@
 
 # this is intended to be run through in.telnetd as a replacement
 # for login with telnetd running as nobody, example inetd.conf:
-# telnet stream tcp nowait nobody /usr/sbin/tcpd /usr/sbin/in.telnetd -L /usr/local/sbin/angusnet-info-bbs
-
+#   telnet stream tcp nowait nobody /usr/sbin/tcpd /usr/sbin/in.telnetd -L /usr/local/sbin/angusnet-info-bbs
+# or from inetd directly in a raw mode
+#   snos-bbs stream tcp nowait nobody /usr/sbin/tcpd /usr/local/sbin/angusnet-info-bbs
+#
 # debian packages:
 #   cowsay bsdgames animals libfile-slurp-perl telnetd libyaml-perl
-#   libterm-readline-perl-perl
+#   libterm-readline-perl-perl telnetd
 
 use strict;
 use warnings;
