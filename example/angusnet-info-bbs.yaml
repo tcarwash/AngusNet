@@ -1,5 +1,10 @@
 ---
 
+environment:
+  PATH: /sbin:/usr/sbin:/bin:/usr/bin:/usr/games:/usr/local/bin:/usr/local/sbin
+  # more puts less load on the network
+  PAGER: more
+
 menu:
   show:
     messages:

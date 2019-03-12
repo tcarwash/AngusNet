@@ -95,12 +95,13 @@ sub run_session {
     our $SESSION_RUNNING = 1;
     our $VERSION;
 
-    # more puts less load on the network
-    $ENV{PAGER} = "more";
-    $ENV{PATH} = "$ENV{PATH}:/usr/games";
+    foreach my $env (keys $CONFIG->{environment}->%*) {
+        $ENV{$env} = $CONFIG->{environment}->{$env};
+    }
 
     say "AngusBBS v", VERSION;
     say "Enable linemode in your telnet client for best experience.";
+    say "If you get ^M when you press enter try enabling line mode one more time.";
 
     while($SESSION_RUNNING) {
         my (@input) = prompt();
