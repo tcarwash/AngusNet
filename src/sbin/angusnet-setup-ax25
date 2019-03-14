@@ -5,7 +5,6 @@ set -e
 
 AX25_NAME="$1"
 AX25_INT="ax0"
-AX25_IP="$(cat /etc/local/angusnet/ampr-address | tr -d '\n')"
 
 if [ "$AX25_NAME" == "" ]; then
     echo "Usage: $(basename $0) <ax25 port name>" >&2
@@ -17,10 +16,14 @@ fi
 /usr/sbin/kissattach "$(readlink /tmp/kisstnc)" "$AX25_NAME"
 #/usr/sbin/nrattach netrom
 
-ifconfig "$AX25_INT" -multicast "$AX25_IP/8"
+if [ -e /etc/local/angusnet/ampr-address ]; then
+    AX25_IP="$(cat /etc/local/angusnet/ampr-address | tr -d '\n')"
+    ifconfig "$AX25_INT" -multicast "$AX25_IP/8"
 
-sysctl net.ipv4.conf."$AX25_INT".accept_redirects=0
-sysctl net.ipv4.conf."$AX25_INT".send_redirects=0
+    sysctl net.ipv4.conf."$AX25_INT".accept_redirects=0
+    sysctl net.ipv4.conf."$AX25_INT".send_redirects=0
 
-echo 1200000 > /proc/sys/net/ipv4/neigh/"$AX25_INT"/base_reachable_time_ms
-echo 15000 > /proc/sys/net/ipv4/neigh/"$AX25_INT"/retrans_time_ms
+    echo 1200000 > /proc/sys/net/ipv4/neigh/"$AX25_INT"/base_reachable_time_ms
+    echo 15000 > /proc/sys/net/ipv4/neigh/"$AX25_INT"/retrans_time_ms
+fi
+
