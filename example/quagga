@@ -8,6 +8,7 @@ interface ax0
 ! the IP must be listed twice with a /32 netmask
 ! or quagga will not advertise the node
  ip address <your IP>/32
+exit
 !
 router rip
 ! the default timing would kill the
@@ -30,4 +31,5 @@ access-list amprnet deny any
 ! listen to the network for the current routes.
 ! ip forwarding
 !
+exit
 end
