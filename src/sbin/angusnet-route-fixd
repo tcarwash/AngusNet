@@ -42,6 +42,9 @@ sub main {
             $mask = '32' unless defined $mask;
             next unless $ampr_subnet->in_filter($ip);
 
+            # unbreak partially configured tap devices
+            @parts = grep { $_ ne 'linkdown' } @parts;
+
             $need_update = 1 if update_or_add_option(src => $ampr_ip, \@parts);
             $need_update = 1 if update_or_add_option(rtt => $conf->{rtt}, \@parts);
             $need_update = 1 if update_or_add_option(mtu =>  $conf->{mtu}, \@parts);
