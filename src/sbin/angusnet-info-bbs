@@ -35,14 +35,14 @@ sub parse_args {
 
     GetOptions(
         "dev" => \$args{dev},
-        "linefeed" => \$args{linefeed},
+        "cr" => \$args{cariagereturn},
         "preserve|p" => \$args{preserve},
         "h=s" => \$args{host},
     ) or usage();
 
     usage() if @ARGV > 1;
 
-    $args{linefeed} = 0 unless defined $args{linefeed};
+    $args{cariagereturn} = 0 unless defined $args{cariagereturn};
     $args{dev} = 0 unless defined $args{dev};
     $args{preserve} = 0 unless defined $args{preserve};
 
@@ -53,10 +53,10 @@ sub usage {
     my $basename = basename($0);
 
     say STDERR "Usage:";
-    say STDERR "  $basename [--dev] [-p|--preserve] [--linefeed] [-h <hostname>] <username>";
+    say STDERR "  $basename [--dev] [-p|--preserve] [--cr] [-h <hostname>] <username>";
     say STDERR "";
     say STDERR "  --dev runs a standalone copy outside in.telnetd for dev work";
-    say STDERR "  --linefeed sets newline to \\r for use with ax25d and axcall";
+    say STDERR "  --cr sets newline to \\r for use with ax25d and axcall";
     say STDERR "  -p preserve enviornment";
     say STDERR "  -h <hostname> is ignored for compatibility with login";
 
@@ -111,7 +111,7 @@ sub run_session {
 
     $| = 1; print '';
 
-    if ($args{linefeed}) {
+    if ($args{cariagereturn}) {
         $/ = "\r";
         $\ = "\r";
     }
