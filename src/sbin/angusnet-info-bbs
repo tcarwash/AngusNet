@@ -42,6 +42,7 @@ sub parse_args {
     usage() if @ARGV > 1;
 
     $args{dev} = 0 unless defined $args{dev};
+    $args{preserve} = 0 unless defined $args{preserve};
 
     return %args;
 }
@@ -53,7 +54,7 @@ sub usage {
     say STDERR "  $basename [--dev] [-p] [-h <hostname>] <username>";
     say STDERR "";
     say STDERR "  --dev runs a standalone copy outside in.telnetd for dev work";
-    say STDERR "  -p is ignored for compatibility with login";
+    say STDERR "  -p preserve enviornment";
     say STDERR "  -h <hostname> is ignored for compatibility with login";
 
     exit(1);
@@ -106,6 +107,10 @@ sub run_session {
     our $CALLSIGN;
 
     $| = 1; print '';
+
+    unless ($args{preserve}) {
+        %ENV = ();
+    }
 
     # SNOS telnet is more like netcat than a telnet protocol
     # speaker but if the BBS runs out of inetd then the terminal
