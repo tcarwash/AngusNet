@@ -165,7 +165,9 @@ sub run_session {
     }
 
     say "AngusBBS v", VERSION;
-    say "Enable linemode in your telnet client for best experience.";
+    say "This is an EXPERIMENTAL packet system especially over AX25.";
+    say "Contact cardboardaardvark\@gmail.com with questions/problem reports.";
+    say "Enable linemode if you are using telnet over packet for best experience.";
     say "If you get ^M when you press enter try enabling line mode one more time.";
     say "Help is available via ? or help";
     say "";
