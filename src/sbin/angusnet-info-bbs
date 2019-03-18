@@ -90,12 +90,15 @@ use constant COMMAND_HANDLERS => {
     logout => \&command_bye,
     info => \&command_info,
     cow => \&command_cow,
+    chat => \&command_chat,
 };
 
 use constant COW_PROGRAMS => {
     say => 'cowsay',
     think => 'cowthink',
 };
+
+use constant CHAT_COMMAND => qw(angusnet-bbs-irc-client --server kg7oem.ampr.org);
 
 sub new {
     my ($package) = @_;
@@ -262,7 +265,10 @@ sub command_help {
     say "  bye: logout";
     say "  info: get a text description of this system";
     say "  cow: tell a cow to do things";
+    say "  chat: chat with other hams on the Internet";
+    say "";
 
+    say "More commands:";
     foreach my $menu_name (sort keys $CONFIG->{menu}->%*) {
         say "  $menu_name: ", $CONFIG->{menu}->{$menu_name}->{messages}->{help};
     }
@@ -313,6 +319,35 @@ sub command_cow__usage {
     say "Usage: ";
     say "  cow say <something to say>";
     say "  cow think <something to think>";
+
+    return;
+}
+
+sub command_chat {
+    my ($topic) = @_;
+    our $CALLSIGN;
+    my @command = (CHAT_COMMAND, '--callsign', $CALLSIGN);
+
+    if (! defined $topic) {
+        command_chat__usage();
+    } elsif ($topic eq 'ragchew') {
+        say "Running chat program";
+        system(@command, '--join', '#ragchew');
+    } elsif ($topic eq 'packet') {
+        say "Running chat program";
+        system(@command, '--join', '#angusnet');
+    } else {
+        command_chat__usage();
+    }
+
+    return;
+}
+
+sub command_chat__usage {
+    say "Chat with other hams over the Internet";
+    say "Usage: ";
+    say "  chat ragchew";
+    say "  chat packet";
 
     return;
 }
