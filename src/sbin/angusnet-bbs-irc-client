@@ -1,0 +1,206 @@
+#!/usr/bin/env perl
+
+# This is a dead trivial irc "client" for use under
+# ax25d.
+#
+# I put this together as fast as possible so it is
+# not done very well. You've been warned.
+#
+# Packages needed from CPAN
+#   Mojo::IRC
+
+use strict;
+use warnings;
+use v5.10;
+use autodie ':all';
+
+use Data::Dumper;
+use File::Basename;
+use Getopt::Long;
+use Mojo::IRC;
+
+main();
+
+sub main {
+    my %conf = parse_argv();
+    my $irc = make_irc_client(%conf);
+    my $stdin = make_stdin_stream($irc, sub {
+        my ($stream, $line) = @_;
+        chomp($line);
+        handle_input($line, $irc, %conf);
+    });
+
+    $/ = "\r";
+    $| = 1; print;
+
+    say_line("Type /quit to leave or /help for instructions.");
+    say_line("Connecting to IRC server $conf{server}");
+    Mojo::IOLoop->start;
+}
+
+sub say_line {
+    local $\ = "\r";
+    print @_;
+}
+
+sub say_error {
+    local $\ = "\r";
+    print STDERR @_;
+}
+
+sub parse_argv {
+    my %args;
+
+    usage() unless GetOptions(
+        "callsign|c=s" => \$args{callsign},
+        "server|s=s" => \$args{server},
+        "join|j=s" => \$args{join},
+    );
+
+    foreach my $required (qw(callsign server join)) {
+        usage() unless defined $args{$required};
+    }
+
+    $args{callsign} = uc($args{callsign});
+    $args{nick} = 'pbbs-' . $args{callsign};
+
+    return %args;
+}
+
+sub usage {
+    my $basename = basename($0);
+    say_error("Usage:");
+    say_error("  $basename --callsign <call> --server <irc server> --join <channel name>");
+    exit(1);
+}
+
+sub handle_input {
+    my ($line, $irc, %conf) = @_;
+
+    if ($line =~ s,^/,,) {
+        return handle_command($line, $irc);
+    } else {
+        $irc->write(privmsg => $conf{join}, ":$line", sub {
+            say_line("$conf{join} $conf{nick}> $line");
+        });
+    }
+}
+
+sub handle_command {
+    my ($command, $irc) = @_;
+
+    handle_command_help($irc) if $command =~/^\s+/;
+
+    if ($command eq 'quit') {
+        handle_command_quit($irc);
+    } elsif ($command eq 'help') {
+        handle_command_help($irc);
+    } elsif ($command eq '?') {
+        handle_command_help($irc);
+    }
+}
+
+sub handle_command_quit {
+    my ($irc) = @_;
+
+    say_line("Disconnecting from server");
+
+    $irc->write('quit', ':user requested quit', sub {
+        say_line("Goodbye");
+        exit(1);
+    });
+}
+
+sub handle_command_help {
+    my ($irc) = @_;
+
+    print <<EOM;
+This is a bridge between packet and a private chat server
+on the Internet. The chat server is frequented by a handful
+of ham radio operators and there is a good chance someone
+is present during normal US daytime hours.
+
+Type /quit to leave the chat system.
+
+To send a message just type it in and press enter.
+EOM
+}
+
+sub make_irc_client {
+    my (%conf) = @_;
+    my $irc = Mojo::IRC->new(
+        nick => $conf{nick},
+        user => 'bbs',
+        server => $conf{server},
+    );
+
+    $irc->parser(Parse::IRC->new(ctcp => 1));
+
+    $irc->on(irc_join => sub {
+        my($self, $message) = @_;
+        say_line("Joined $message->{params}[0] as $conf{nick}");
+    });
+
+    $irc->on(irc_privmsg => sub {
+        my($self, $message) = @_;
+        my ($destination, $content) = $message->{params}->@*;
+        my $sender_nick = get_nick($message->{prefix});
+
+        if ($destination eq $conf{join}) {
+            say_line("$destination $sender_nick> $content");
+        }
+    });
+
+    $irc->connect(sub {
+        my($irc, $err) = @_;
+        say_line("Connected to server; joining $conf{join}");
+        die $err if $err;
+        $irc->write(join => $conf{join});
+    });
+}
+
+# from https://gist.github.com/briandfoy/8a62c82a222b1265f74d46ab4c8df614
+sub make_stdin_stream {
+    my ($irc, $line) = @_;
+    state $rc = require Mojo::IOLoop::Stream;
+
+    my $stream = Mojo::IOLoop::Stream->new( \*STDIN );
+    my $sid = Mojo::IOLoop->stream( $stream );
+
+    $stream->timeout(0);
+
+    $stream->on(error => sub {
+        warn "got error on STDIN";
+        exit(1);
+    });
+
+    $stream->on(read => sub {
+        my ($stream, $octets) = @_;
+        state $buffer = '';
+        my $newline = $/;
+
+        next unless length $octets;
+        $buffer .= $octets;
+        my @lines = split /$newline/, $buffer;
+        $buffer = '';
+
+        unless( $octets =~ /$newline/ ) {
+            $buffer = pop @lines;
+        }
+
+        $line->( $stream, $_ ) for @lines;
+    });
+
+    $stream->on(close => sub {
+        say_line("Got EOF on STDIN");
+        handle_command_quit($irc);
+    });
+
+    return $stream;
+}
+
+sub get_nick {
+    my ($userinfo) = @_;
+    die "regex failure with '$userinfo'" unless $userinfo =~ /^([^!]+)!/;
+    return $1;
+}
